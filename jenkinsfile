@@ -1,0 +1,169 @@
+pipeline {
+    agent any
+
+     // Pipeline parameters (user-defined input values when running the pipeline)
+     parameters {
+        string(name: 'DEPLOY_VERSION', defaultValue: '', description: 'Enter the version to deploy (used in userdata script)')
+      }
+    // Environment variables used across the pipeline
+    environment {
+            // Secrets stored in AWS Secret Manager
+            IMAGE_TAG="${params.DEPLOY_VERSION}"
+            REPOSITORY_URI=credentials("REPOSITORY_URI")
+            IMAGE_REPO_NAME=credentials("IMAGE_REPO_NAME")
+            REGION=credentials("REGION")
+            ACCOUNT_ID=credentials('ACCOUNT_ID')
+
+            REPO_BRANCH    = "main"                                  // Base branch of Repo
+            HELM_CHART_PATH  = "my-helm-chart/values.yaml"             // Path to values.yaml inside repo
+            GITHUB_TOKEN_ID  = "github-token"                          // Jenkins secret text credential
+            
+            SONAR_HOME = tool "Sonar"
+    }
+
+    stages {
+      // Stage 1: Clone application code from GitHub
+        stage('Git Checkout') {
+            steps {
+                // Get some code from a GitHub repository
+                git(
+                    url: "https://github.com/AmanSingh881/DevSecOps-Pipeline-Project.git",
+                    branch: "main"
+                )
+
+            }
+        }
+        // Stage 2: Run static code analysis with SonarQube
+         stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("Sonar") {
+                    sh """
+                        ${SONAR_HOME}/bin/sonar-scanner \
+                        -Dsonar.projectKey=AmanSingh881_ANSIBLE_PROJECT \
+                        -Dsonar.organization=amansingh881 \
+                        -Dsonar.projectName=ANSIBLE_PROJECT \
+                    """
+                }
+            }
+        }
+        // Stage 3: Check SonarQube Quality Gate
+        stage("Quality Gate") {
+            steps {
+                echo "Step: Checking SonarQube Quality Gate"
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+         // Stage 4: Run OWASP Dependency-Check for vulnerabilities
+         // Performs dependency check for security vulnerabilities
+        stage("OWASP dependency check") {
+            steps{
+                // dependencyCheck additionalArguments: '--format HTML', ocdInstallation: 'DP-Check'
+                dependencyCheck additionalArguments: '', odcInstallation: 'DP-Check'
+            }
+        }
+        
+        // Stage 5: Build Docker image from the Dockerfile
+        stage('Docker Build Image') {
+              steps {
+                sh 'docker build -t ${IMAGE_REPO_NAME}:${IMAGE_TAG} .'
+              }
+        }
+    
+        // Stage 6: Authenticate to AWS ECR and push Docker image
+        stage('Pushing to ECR') {
+          steps {  
+            script {
+              // Authenticate Docker to AWS ECR using AWS CLI
+              sh """
+                aws ecr get-login-password --region ${REGION} \
+                  | docker login \
+                      --username AWS \
+                      --password-stdin ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
+              """
+              // Tag the Docker image with ECR repository URI
+              sh """
+                docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${REPOSITORY_URI}:${IMAGE_TAG}
+              """
+              // Push the image to AWS ECR
+              sh """
+                docker push ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}
+              """
+            }
+          }
+        }
+
+        // Stage 7: Create Pull Request
+        stage('Update Target Repo and Create PR') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: "${GITHUB_TOKEN_ID}", variable: 'GITHUB_TOKEN')]) {
+
+                        // Step 1: Clone Repo B using token
+                        sh """
+                            rm -rf repo-b
+                            git clone https://${GITHUB_TOKEN}@github.com/AmanSingh881/DevSecOps-Pipeline-Project.git repo-b
+                        """
+
+                        dir('repo-b') {
+                            // Step 2: Create feature branch
+                            sh """
+                                git checkout -b featureBranch
+                            """
+
+                            // Step 3: Update values.yaml (only update image.tag)
+                            sh """
+                                yq e -i '.image.tag = "${params.IMAGE_TAG}"' ${HELM_CHART_PATH}
+                            """
+
+                            // Step 4: Commit and push
+                            sh """
+                                git config user.email "ci-bot@company.com"
+                                git config user.name "CI Bot"
+                                git add ${HELM_CHART_PATH}
+                                git commit -m "Update image tag to ${params.IMAGE_TAG}"
+                                git push https://${GITHUB_TOKEN}@github.com/AmanSingh881/DevSecOps-Pipeline-Project.git featureBranch
+                            """
+
+                            // Step 5: Create Pull Request
+                            sh """
+                                export GITHUB_TOKEN=${GITHUB_TOKEN}
+                                gh pr create \
+                                    --title "Update image tag to ${params.IMAGE_TAG}" \
+                                    --body "This PR updates values.yaml to use image tag: ${params.IMAGE_TAG}" \
+                                    --base ${REPO_BRANCH} \
+                                    --head featureBranch
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+
+    }
+  // Post-build cleanup actions (always executed)
+    post {
+        always {
+            echo "Cleaning up local Docker images..."
+            sh """
+                docker rmi ${IMAGE_REPO_NAME}:${IMAGE_TAG} || true
+                docker rmi ${REPOSITORY_URI}:${IMAGE_TAG} || true
+                docker image prune -f || true
+            """
+        }
+
+        success {
+            echo "✅ Pipeline completed successfully. Pull Request created in Repo B."
+        }
+        failure {
+            echo "❌ Pipeline failed. Please check logs."
+        }
+
+    }
+
+}
+

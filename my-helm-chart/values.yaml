@@ -1,0 +1,11 @@
+replicaCount: 1
+
+image:
+  repository: 607838039722.dkr.ecr.us-east-1.amazonaws.com/ansibleproject
+  pullPolicy: IfNotPresent
+  tag: 2
+
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30085
