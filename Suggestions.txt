@@ -12,4 +12,3 @@ Add contribution guidelines and track improvements with GitHub Issues.
 
 Overall, the project is good; these changes would make it cleaner, easier to maintain, and more user-friendly.
 
-is this are correct to the repo https://github.com/AmanSingh881/GitOps-ArgoCD-Project
