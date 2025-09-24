@@ -87,14 +87,6 @@ To ensure controlled and auditable deployments, the following branching strategy
 
 ---
 
-## 🔁 Rollbacks
-
-- If a deployment introduces issues, rollbacks are simple:  
-  - Revert the problematic commit in the **Manifests Repository**.  
-  - ArgoCD detects the change and synchronizes the cluster back to the last good state.  
-
----
-
 ## ✅ Key Advantages of This Workflow
 
 - **Separation of concerns**:  
@@ -109,9 +101,6 @@ To ensure controlled and auditable deployments, the following branching strategy
 
 - **Reliability**:  
   - ArgoCD continuously monitors and heals drift between desired and actual state.  
-
-- **Rollback Support**:  
-  - Rollbacks are Git reverts, not manual interventions.  
 
 ---
 
