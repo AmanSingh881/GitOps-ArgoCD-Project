@@ -7,8 +7,14 @@ The workflow is built around the principle that **Git is the single source of tr
 ---
 
 ## 📋 Before You Begin
-- If you want to know how to set up the environment (KinD cluster, ArgoCD installation, etc.), please refer to: **[`Prerequisit.md`](./Prerequisites.md)**  
-- If you want to understand the detailed CI pipeline (Jenkins, SonarQube, OWASP, Docker, AWS ECR), please refer to: **[`CI.md`](./CI.md)**.  
+- If you want to know how to set up the environment (KinD cluster, ArgoCD installation, etc.), please refer to: **[`Prerequisit.md`](./Prerequisites.md)**
+
+
+
+- If you want to understand the detailed CI pipeline (Jenkins, SonarQube, OWASP, Docker, AWS ECR), please refer to: **[`CI.md`](./CI.md)**.
+
+![CI-CD Workflow](Assets/CIworkflow.png)
+
 - If you want to know how to set up the ArgoCD , please refer to: **[`ArgoCDsetup.md`](./ArgoCDsetup.md)** 
 
 This file explains only the **workflow from CI to GitOps** as shown in the diagram below:
